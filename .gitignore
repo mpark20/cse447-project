@@ -1,5 +1,7 @@
 *.py[cod]
+*.out
 work/
 output/
 submit/
 submit.zip
+data/*.json
