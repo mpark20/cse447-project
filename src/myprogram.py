@@ -2,17 +2,19 @@
 import os
 import string
 import random
+import json
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import torch
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader, random_split
 from torch import nn, optim
-import matplotlib.pyplot as plt
 from collections import Counter
 from typing import Dict, List, Optional, Set
 import nltk
-import keras
+
+nltk.download('punkt_tab')
+MAX_LINE_LEN = 128
 
 class CharLSTM(nn.Module):
 
@@ -36,7 +38,7 @@ class CharLSTM(nn.Module):
         return output
 
 def load_training_data():
-    with open('scifi_movie_lines.txt', 'r') as file:
+    with open('data/scifi_movie_lines.txt', 'r') as file:
         all_text = file.read()
     all_text = clean_text(all_text)
     char_set = sorted(list(set(all_text)))
@@ -54,28 +56,17 @@ def load_training_data():
         all_prefixes.extend(prefixes)
         all_suffixes.extend(suffixes)
 
-    # get encoding for rnn (max sentence char count, num examples, num possible chars)
-    indices = random.sample(range(1, len(all_prefixes)), 2560)
+    # shuffling and sampling to save training time
+    indices = random.sample(range(1, len(all_prefixes)), 10240)
     prefix_sample = list(map(lambda i: all_prefixes[i], indices))
     suffix_sample = list(map(lambda i: all_suffixes[i], indices))
 
     # convert strings to fixed length numeric vectors
-    width = 128
-    all_Xs = []
-    for line in prefix_sample:
-        if len(line) > width:
-            line = line[len(line) - width:]
-            assert len(line) == width
-        vec = torch.tensor([char2idx[c] for c in line])
-        padded_vec = F.pad(vec, (width - len(vec),0), value=0)
-        all_Xs.append(padded_vec)
-
+    all_Xs = [encode_text(prefix, char2idx, width=MAX_LINE_LEN) for prefix in prefix_sample]
     X = torch.stack(all_Xs)
     y = torch.tensor([char2idx[suf] for suf in suffix_sample])
 
-    # data loader
-    dataset = TensorDataset(X, y)
-    
+    dataset = TensorDataset(X, y)  
     return char2idx, idx2char, dataset
 
 def load_test_data(fname):
@@ -93,70 +84,73 @@ def write_pred(preds, fname):
             f.write('{}\n'.format(p))
 
 def run_pred(data, char2idx, idx2char):
-    def encode_text(text, char2idx, max_len):
-        if len(text) > max_len:
-            text = text[len(text) - max_len:]
-        vec = torch.tensor([char2idx[c] for c in text if c in char2idx.keys()])
-        padded_vec = F.pad(vec, (max_len - len(vec),0), value=0)
-        return padded_vec
-
-    def decode_vec(y_hat, idx2char):
-        top3_chars = ""
-        labels = torch.topk(y_hat, k=3, dim=1)
-        for label in labels.indices[0]:
-            next_char = idx2char[label.item()]
-            top3_chars += next_char
-        return top3_chars
-    
     preds = []
     all_chars = string.ascii_letters
     for inp in data:
         inp = clean_text(inp)
-        x = encode_text(inp, char2idx)
+        x = encode_text(inp, char2idx, width=MAX_LINE_LEN)
         y_hat = model(x.unsqueeze(0))
         top_guesses = decode_vec(y_hat, idx2char)
         preds.append(''.join(top_guesses))
     return preds
 
 def save(model, work_dir):
-    model.save(work_dir)
-    # torch.save(model.state_dict(), os.path.join(work_dir, 'model.checkpoint'))
+    ckpt_path = os.path.join(work_dir, 'model.checkpoint')
+    torch.save(model.state_dict(), ckpt_path)
 
 
 def load(model, work_dir):
-    # model.load_state_dict(torch.load(os.path.join(work_dir, 'model.checkpoint')))
-    model = keras.models.load_model(work_dir)
+    ckpt_path = os.path.join(work_dir, 'model.checkpoint')
+    model.load_state_dict(torch.load(ckpt_path, weights_only=True))
     return model
 
 def run_train(model, dataset):
-    EPOCHS = 100
+    EPOCHS = 50
     BATCH_SIZE = 128
+    LEARNING_RATE = 0.001
 
     train_dataset, val_dataset, test_dataset = random_split(dataset, [0.8, 0.1, 0.1])
-    
+
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     train_results = train(
         train_loader,
         model,
         criterion,
-        optimizer,
-        val_loader,
-        epochs=EPOCHS
+        val_loader=val_loader,
+        lr=LEARNING_RATE,
+        epochs=EPOCHS,
+        early_stop=True
     )
+
+def encode_text(text: str, char2idx, width=None) -> torch.Tensor:
+    if width is not None and len(text) > width:
+        text = text[len(text) - width:]
+    vec = torch.tensor([char2idx.get(c, 0) for c in text])
+    if width is not None:
+        return F.pad(vec, (width - len(vec), 0), value=0)
+    return vec
+
+def decode_vec(y_hat, idx2char):
+    top3_chars = ""
+    labels = torch.topk(y_hat, k=3, dim=1)
+    for label in labels.indices[0]:
+        next_char = idx2char[label.item()]
+        top3_chars += next_char
+    return top3_chars
 
 def train(
     train_loader: DataLoader,
     model: nn.Module,
     criterion: nn.Module,
-    optimizer: optim.Optimizer,
     val_loader: Optional[DataLoader] = None,
+    lr: float = 0.001,
     epochs: int = 100,
+    early_stop = True,
     verbose: bool = True
 ) -> Dict[str, List[float]]:
     losses = {
@@ -164,6 +158,7 @@ def train(
         'val': []
     }
 
+    optimizer = optim.Adam(model.parameters(), lr=lr)
     for i in range(epochs):
         train_loss = 0
         val_loss = 0
@@ -185,11 +180,11 @@ def train(
                 val_loss += batch_loss.item()
         losses['val'].append(val_loss / len(val_loader))
         if i % 5 == 0 and verbose:
-          print(f"EPOCH {i+1}: ")
+          print(f"EPOCH {i}: ")
           print(f"Train loss: {losses['train'][-1]:.4f}, Val loss: {losses['val'][-1]:.4f}")
 
-        if i > 5 and losses['val'][-1] > losses['val'][-2] + 0.01:
-          print(f"Stopping at early at epoch {i}")
+        if early_stop and i > 5 and losses['val'][-1] > losses['val'][-2] + 0.01:
+          print(f"Stopping at early at epoch {i}, val loss increased.")
           break
 
     return losses
@@ -258,7 +253,6 @@ def evaluate(
     recall = get_recall(y_pred, y_val)
     f1 = get_f1_score(y_pred, y_val)
 
-
     return {
         "loss": val_loss,
         "accuracy": accuracy,
@@ -268,17 +262,15 @@ def evaluate(
     }
 
 # helper functions for text processing
-PUNCTUATION = set(string.punctuation)
 
 def clean_text(text):
     text = text.lower()
-    punct_removal = str.maketrans({c:"" for c in PUNCTUATION if c != "."})
+    punct_removal = str.maketrans({c:"" for c in set(string.punctuation) if c != "."})
     text = text.translate(punct_removal)
     text = text.replace('\n', ' ').replace('\r','').replace('\t', '')
     text = text.strip()
     text = " ".join(text.split())
     return text
-
 
 # main
 if __name__ == '__main__':
@@ -293,7 +285,7 @@ if __name__ == '__main__':
 
     EMBED_DIM = 128
     HIDDEN_DIM = 128
-    DROPOUT = 0.2
+    DROPOUT = 0.4
 
     if args.mode == 'train':
         if not os.path.isdir(args.work_dir):
@@ -301,24 +293,42 @@ if __name__ == '__main__':
             os.makedirs(args.work_dir)
         print('Loading training data')
         char2idx, idx2char, dataset = load_training_data()
+        with open("data/char_to_index.json", "w") as fp:
+            json.dump(char2idx, fp)
+        with open("data/index_to_char.json", "w") as fp:
+            json.dump(idx2char, fp)
         print('Instatiating model')
         model = CharLSTM(input_dim=len(char2idx),
                         output_dim=len(char2idx),
                         embedding_dim=EMBED_DIM,
                         hidden_dim=HIDDEN_DIM,
-                        dropout=DROPOUT
-                        )
+                        dropout=DROPOUT)
         print('Training')
         run_train(model, dataset)
         print('Saving model')
-        save(args.work_dir)
+        save(model, args.work_dir)
     elif args.mode == 'test':
+        print('Loading char vocab')
+        if not (os.path.exists("data/char_to_index.json") and os.path.exists("data/index_to_char.json")):
+            raise FileNotFoundError(
+                "Character index had not been loaded yet. Please train model before making predictions."
+            )
+        with open("data/char_to_index.json", "r") as fp:
+            char2idx = json.load(fp)
+        with open("data/index_to_char.json", "r") as fp:
+            idx2char = json.load(fp)
+            idx2char = {int(k):v for k,v in idx2char.items()}
         print('Loading model')
-        model = load(args.work_dir)
+        model = CharLSTM(input_dim=len(char2idx),
+                        output_dim=len(char2idx),
+                        embedding_dim=EMBED_DIM,
+                        hidden_dim=HIDDEN_DIM,
+                        dropout=DROPOUT)
+        load(model, args.work_dir)
         print('Loading test data from {}'.format(args.test_data))
         test_data = load_test_data(args.test_data)
         print('Making predictions')
-        pred = run_pred(test_data)
+        pred = run_pred(test_data, char2idx=char2idx, idx2char=idx2char)
         print('Writing predictions to {}'.format(args.test_output))
         assert len(pred) == len(test_data), 'Expected {} predictions but got {}'.format(len(test_data), len(pred))
         write_pred(pred, args.test_output)
