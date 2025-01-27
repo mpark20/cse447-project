@@ -100,12 +100,12 @@ def run_pred(data, char2idx, idx2char):
 
 def save(model, work_dir):
     ckpt_path = os.path.join(work_dir, 'model.checkpoint')
-    torch.save(model.state_dict(), ckpt_path)
+    torch.save(model.state_dict(), ckpt_path, _use_new_zipfile_serialization=False)
 
 
 def load(model, work_dir):
     ckpt_path = os.path.join(work_dir, 'model.checkpoint')
-    model.load_state_dict(torch.load(ckpt_path, weights_only=True))
+    model.load_state_dict(torch.load(ckpt_path))
     return model
 
 def run_train(model, dataset):
@@ -113,7 +113,7 @@ def run_train(model, dataset):
     BATCH_SIZE = 128
     LEARNING_RATE = 0.001
 
-    train_dataset, val_dataset, test_dataset = random_split(dataset, [0.8, 0.1, 0.1])
+    train_dataset, val_dataset, test_dataset = random_split(dataset, [8192, 1024, 1024])
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True)
