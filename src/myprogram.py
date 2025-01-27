@@ -7,14 +7,18 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import torch
 import torch.nn.functional as F
+import nltk
 from torch.utils.data import TensorDataset, DataLoader, random_split
 from torch import nn, optim
 from collections import Counter
-from typing import Dict, List, Optional, Set
-import nltk
+from typing import Dict, List, Optional
+from pathlib import Path
 
 nltk.download('punkt_tab')
 MAX_LINE_LEN = 128
+TRAIN_DATA_PATH = Path(__file__).parent.parent / "data/scifi_movie_lines.txt"
+CHAR_TO_INDEX_FILE = "char_to_index.json"
+INDEX_TO_CHAR_FILE = "index_to_char.json"
 
 class CharLSTM(nn.Module):
 
@@ -38,7 +42,7 @@ class CharLSTM(nn.Module):
         return output
 
 def load_training_data():
-    with open('data/scifi_movie_lines.txt', 'r') as file:
+    with open(TRAIN_DATA_PATH, 'r') as file:
         all_text = file.read()
     all_text = clean_text(all_text)
     char_set = sorted(list(set(all_text)))
@@ -157,7 +161,9 @@ def train(
         'train': [],
         'val': []
     }
-
+    best_val_loss = float('inf')
+    no_improvement = 0
+    grace_period = 5
     optimizer = optim.Adam(model.parameters(), lr=lr)
     for i in range(epochs):
         train_loss = 0
@@ -179,13 +185,15 @@ def train(
                 batch_loss = criterion(y_hat, y_val)
                 val_loss += batch_loss.item()
         losses['val'].append(val_loss / len(val_loader))
-        if i % 5 == 0 and verbose:
-          print(f"EPOCH {i}: ")
-          print(f"Train loss: {losses['train'][-1]:.4f}, Val loss: {losses['val'][-1]:.4f}")
-
-        if early_stop and i > 5 and losses['val'][-1] > losses['val'][-2] + 0.01:
-          print(f"Stopping at early at epoch {i}, val loss increased.")
-          break
+        if verbose:
+            print(f"EPOCH {i}/{epochs}: Train loss: {losses['train'][-1]:.4f}, Val loss: {losses['val'][-1]:.4f}")
+        if losses['val'][-1] < best_val_loss:
+            best_val_loss = losses['val'][-1]
+        else:
+            no_improvement += 1
+        if no_improvement > grace_period:
+            print(f"Stoping early, detected {grace_period} epochs with no val loss improvement.")
+            break
 
     return losses
 
@@ -193,7 +201,6 @@ def train(
 def evaluate(
     model: nn.Module,
     val_loader: DataLoader,
-    eval_batch_size: int = 32,
     loss_fn = nn.CrossEntropyLoss(),
     device: str = "cpu",
 ) -> Dict[str, float]:
@@ -283,9 +290,9 @@ if __name__ == '__main__':
 
     random.seed(0)
 
-    EMBED_DIM = 128
-    HIDDEN_DIM = 128
-    DROPOUT = 0.4
+    EMBED_DIM = 64
+    HIDDEN_DIM = 32
+    DROPOUT = 0.2
 
     if args.mode == 'train':
         if not os.path.isdir(args.work_dir):
@@ -293,9 +300,9 @@ if __name__ == '__main__':
             os.makedirs(args.work_dir)
         print('Loading training data')
         char2idx, idx2char, dataset = load_training_data()
-        with open("data/char_to_index.json", "w") as fp:
+        with open(os.path.join(args.work_dir, CHAR_TO_INDEX_FILE), "w") as fp:
             json.dump(char2idx, fp)
-        with open("data/index_to_char.json", "w") as fp:
+        with open(os.path.join(args.work_dir, INDEX_TO_CHAR_FILE), "w") as fp:
             json.dump(idx2char, fp)
         print('Instatiating model')
         model = CharLSTM(input_dim=len(char2idx),
@@ -309,13 +316,14 @@ if __name__ == '__main__':
         save(model, args.work_dir)
     elif args.mode == 'test':
         print('Loading char vocab')
-        if not (os.path.exists("data/char_to_index.json") and os.path.exists("data/index_to_char.json")):
-            raise FileNotFoundError(
-                "Character index had not been loaded yet. Please train model before making predictions."
-            )
-        with open("data/char_to_index.json", "r") as fp:
+        char2idx_path = os.path.join(args.work_dir, CHAR_TO_INDEX_FILE)
+        idx2char_path = os.path.join(args.work_dir, INDEX_TO_CHAR_FILE)
+        if not (os.path.exists(char2idx_path) and os.path.exists(idx2char_path)):
+            raise FileNotFoundError("Character index has not been loaded yet.")
+        # Load character indices from disk
+        with open(char2idx_path, "r") as fp:
             char2idx = json.load(fp)
-        with open("data/index_to_char.json", "r") as fp:
+        with open(idx2char_path, "r") as fp:
             idx2char = json.load(fp)
             idx2char = {int(k):v for k,v in idx2char.items()}
         print('Loading model')
