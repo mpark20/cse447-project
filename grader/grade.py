@@ -10,7 +10,7 @@ args = parser.parse_args()
 
 
 def load_pred(fname, force_limit=None):
-    with open(fname) as f:
+    with open(fname, encoding='utf-8') as f:
         loaded = []
         for line in f:
             line = line[:-1].lower()
