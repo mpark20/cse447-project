@@ -18,7 +18,14 @@ nltk.download('punkt')
 nltk.download('punkt_tab')
 
 MAX_LINE_LEN = 128
-TRAIN_DATA_PATH = Path(__file__).parent.parent / "data/scifi_movie_lines.txt"
+
+TRAIN_INPUTS_PATH = Path(__file__).parent.parent / "data/train/train_inputs.txt"
+TRAIN_LABELS_PATH = Path(__file__).parent.parent / "data/train/train_labels.txt"
+VAL_INPUTS_PATH = Path(__file__).parent.parent / "data/val/val_inputs.txt"
+VAL_LABELS_PATH = Path(__file__).parent.parent / "data/val/val_labels.txt"
+TEST_INPUTS_PATH = Path(__file__).parent.parent / "data/test/test_inputs.txt"
+TEST_LABELS_PATH = Path(__file__).parent.parent / "data/test/test_labels.txt"
+
 CHAR_TO_INDEX_FILE = "char_to_index.json"
 INDEX_TO_CHAR_FILE = "index_to_char.json"
 
@@ -43,37 +50,35 @@ class CharLSTM(nn.Module):
         output = self.fc(lstm_out[:, -1, :])
         return output
 
-def load_training_data():
-    with open(TRAIN_DATA_PATH, 'r', encoding="utf-8") as file:
-        all_text = file.read()
-    all_text = clean_text(all_text)
-    char_set = sorted(list(set(all_text)))
-    char2idx = {ch:i for i,ch in enumerate(char_set)}
-    idx2char = {i:ch for i,ch in enumerate(char_set)}
-
-    # break sentences into prefix-suffix pairs
-    sentences = nltk.sent_tokenize(all_text)
-    all_prefixes = []
-    all_suffixes = []
-    min_len = 3
-    for sent in sentences:
-        prefixes = [sent[:i+1] for i in range(min_len, len(sent)-1)]
-        suffixes = [sent[i] for i in range(min_len + 1, len(sent))]
-        all_prefixes.extend(prefixes)
-        all_suffixes.extend(suffixes)
-
-    # shuffling and sampling to save training time
-    indices = random.sample(range(1, len(all_prefixes)), 10240)
-    prefix_sample = list(map(lambda i: all_prefixes[i], indices))
-    suffix_sample = list(map(lambda i: all_suffixes[i], indices))
-
+def load_dataset(inputs_path, labels_path, char2idx):
+    inputs = []
+    labels = []
+    with open(inputs_path, "r", encoding="utf-8") as f:
+        for line in f:
+            inputs.append(line[:-1])
+    with open(labels_path, "r", encoding="utf-8") as f:
+        for line in f:
+            labels.append(line[:-1])
     # convert strings to fixed length numeric vectors
-    all_Xs = [encode_text(prefix, char2idx, width=MAX_LINE_LEN) for prefix in prefix_sample]
-    X = torch.stack(all_Xs)
-    y = torch.tensor([char2idx[suf] for suf in suffix_sample])
+    # TODO: re-normalize text. this was already done when making the dataset
+    # but perhaps would be good to do it again here to be safe.
+    X_list = [encode_text(text, char2idx, width=MAX_LINE_LEN) for text in inputs]
+    X = torch.stack(X_list)
+    y = torch.tensor([char2idx.get(c, 0) for c in labels])
+    return TensorDataset(X, y)
 
-    dataset = TensorDataset(X, y)  
-    return char2idx, idx2char, dataset
+def load_training_data():
+    # get char vocab from training data, use this to encode all dataset splits
+    char2idx, idx2char = fit_char_vocab(TRAIN_INPUTS_PATH)
+    train_dataset = load_dataset(TRAIN_INPUTS_PATH, TRAIN_LABELS_PATH, char2idx)
+    val_dataset = load_dataset(VAL_INPUTS_PATH, VAL_LABELS_PATH, char2idx)
+    test_dataset = load_dataset(TEST_INPUTS_PATH, TEST_LABELS_PATH, char2idx)
+    
+    return {
+        "train": train_dataset,
+        "val": val_dataset,
+        "test": test_dataset
+    }
 
 def load_test_data(fname):
     # your code here
@@ -91,7 +96,6 @@ def write_pred(preds, fname):
 
 def run_pred(data, char2idx, idx2char):
     preds = []
-    all_chars = string.ascii_letters
     for inp in data:
         inp = clean_text(inp)
         x = encode_text(inp, char2idx, width=MAX_LINE_LEN)
@@ -104,22 +108,18 @@ def save(model, work_dir):
     ckpt_path = os.path.join(work_dir, 'model.checkpoint')
     torch.save(model.state_dict(), ckpt_path, _use_new_zipfile_serialization=False)
 
-
 def load(model, work_dir):
     ckpt_path = os.path.join(work_dir, 'model.checkpoint')
     model.load_state_dict(torch.load(ckpt_path))
     return model
 
-def run_train(model, dataset):
+def run_train(model, train_dataset, val_dataset):
     EPOCHS = 50
     BATCH_SIZE = 128
     LEARNING_RATE = 0.001
 
-    train_dataset, val_dataset, test_dataset = random_split(dataset, [8192, 1024, 1024])
-
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
     criterion = nn.CrossEntropyLoss()
 
@@ -202,7 +202,7 @@ def train(
 
 def evaluate(
     model: nn.Module,
-    val_loader: DataLoader,
+    data_loader: DataLoader,
     loss_fn = nn.CrossEntropyLoss(),
     device: str = "cpu",
 ) -> Dict[str, float]:
@@ -245,7 +245,7 @@ def evaluate(
     y_pred_list = []
 
     with torch.no_grad():
-      for X_batch, y_batch in val_loader:
+      for X_batch, y_batch in data_loader:
         X_batch, y_batch = X_batch.to(device), y_batch.to(device)
         logits = model(X_batch)
         batch_loss = loss_fn(logits, y_batch)
@@ -253,7 +253,7 @@ def evaluate(
         y_pred_list.extend(batch_preds.cpu())
         y_val_list.extend(y_batch)
         val_loss += batch_loss.item()
-    val_loss /= len(val_loader)
+    val_loss /= len(data_loader)
     y_pred = torch.stack(y_pred_list)
     y_val = torch.stack(y_val_list)
 
@@ -271,6 +271,35 @@ def evaluate(
     }
 
 # helper functions for text processing
+def fit_char_vocab(text_file_path: str):
+    """
+    Gets char-to-index and index-to-char mappings for all characters in the given text file.
+    Writes the resulting indices to disk so that it can be used at inference time.
+    """
+    with open(text_file_path, "r", encoding="utf-8") as f:
+        all_text = f.read()
+    all_text = clean_text(all_text)
+    char_set = sorted(list(set(all_text)))
+    char2idx = {ch:i for i,ch in enumerate(char_set)}
+    idx2char = {i:ch for i,ch in enumerate(char_set)}
+    with open(os.path.join(args.work_dir, CHAR_TO_INDEX_FILE), "w", encoding="utf-8") as fp:
+        json.dump(char2idx, fp)
+    with open(os.path.join(args.work_dir, INDEX_TO_CHAR_FILE), "w", encoding="utf-8") as fp:
+        json.dump(idx2char, fp)
+    return char2idx, idx2char
+
+def load_char_indices():
+    char2idx_path = os.path.join(args.work_dir, CHAR_TO_INDEX_FILE)
+    idx2char_path = os.path.join(args.work_dir, INDEX_TO_CHAR_FILE)
+    if not (os.path.exists(char2idx_path) and os.path.exists(idx2char_path)):
+        raise FileNotFoundError("Character index has not been loaded yet. Please run fit_char_vocab.")
+    # Load character indices from disk
+    with open(char2idx_path, "r", encoding="utf-8") as fp:
+        char2idx = json.load(fp)
+    with open(idx2char_path, "r", encoding="utf-8") as fp:
+        idx2char = json.load(fp)
+        idx2char = {int(k):v for k,v in idx2char.items()}
+    return char2idx, idx2char
 
 def clean_text(text):
     text = text.lower()
@@ -301,11 +330,8 @@ if __name__ == '__main__':
             print('Making working directory {}'.format(args.work_dir))
             os.makedirs(args.work_dir)
         print('Loading training data')
-        char2idx, idx2char, dataset = load_training_data()
-        with open(os.path.join(args.work_dir, CHAR_TO_INDEX_FILE), "w", encoding="utf-8") as fp:
-            json.dump(char2idx, fp)
-        with open(os.path.join(args.work_dir, INDEX_TO_CHAR_FILE), "w", encoding="utf-8") as fp:
-            json.dump(idx2char, fp)
+        dataset_dict = load_training_data()
+        char2idx, idx2char = load_char_indices()
         print('Instatiating model')
         model = CharLSTM(input_dim=len(char2idx),
                         output_dim=len(char2idx),
@@ -313,21 +339,12 @@ if __name__ == '__main__':
                         hidden_dim=HIDDEN_DIM,
                         dropout=DROPOUT)
         print('Training')
-        run_train(model, dataset)
+        run_train(model, dataset_dict["train"], dataset_dict["val"])
         print('Saving model')
         save(model, args.work_dir)
     elif args.mode == 'test':
         print('Loading char vocab')
-        char2idx_path = os.path.join(args.work_dir, CHAR_TO_INDEX_FILE)
-        idx2char_path = os.path.join(args.work_dir, INDEX_TO_CHAR_FILE)
-        if not (os.path.exists(char2idx_path) and os.path.exists(idx2char_path)):
-            raise FileNotFoundError("Character index has not been loaded yet.")
-        # Load character indices from disk
-        with open(char2idx_path, "r", encoding="utf-8") as fp:
-            char2idx = json.load(fp)
-        with open(idx2char_path, "r", encoding="utf-8") as fp:
-            idx2char = json.load(fp)
-            idx2char = {int(k):v for k,v in idx2char.items()}
+        char2idx, idx2char = load_char_indices()
         print('Loading model')
         model = CharLSTM(input_dim=len(char2idx),
                         output_dim=len(char2idx),
