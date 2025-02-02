@@ -14,7 +14,9 @@ from collections import Counter
 from typing import Dict, List, Optional
 from pathlib import Path
 
+nltk.download('punkt')
 nltk.download('punkt_tab')
+
 MAX_LINE_LEN = 128
 TRAIN_DATA_PATH = Path(__file__).parent.parent / "data/scifi_movie_lines.txt"
 CHAR_TO_INDEX_FILE = "char_to_index.json"
@@ -42,7 +44,7 @@ class CharLSTM(nn.Module):
         return output
 
 def load_training_data():
-    with open(TRAIN_DATA_PATH, 'r') as file:
+    with open(TRAIN_DATA_PATH, 'r', encoding="utf-8") as file:
         all_text = file.read()
     all_text = clean_text(all_text)
     char_set = sorted(list(set(all_text)))
@@ -76,14 +78,14 @@ def load_training_data():
 def load_test_data(fname):
     # your code here
     data = []
-    with open(fname) as f:
+    with open(fname, encoding="utf-8") as f:
         for line in f:
             inp = line[:-1]  # the last character is a newline
             data.append(inp)
     return data
 
 def write_pred(preds, fname):
-    with open(fname, 'wt') as f:
+    with open(fname, 'wt', encoding="utf-8") as f:
         for p in preds:
             f.write('{}\n'.format(p))
 
@@ -300,9 +302,9 @@ if __name__ == '__main__':
             os.makedirs(args.work_dir)
         print('Loading training data')
         char2idx, idx2char, dataset = load_training_data()
-        with open(os.path.join(args.work_dir, CHAR_TO_INDEX_FILE), "w") as fp:
+        with open(os.path.join(args.work_dir, CHAR_TO_INDEX_FILE), "w", encoding="utf-8") as fp:
             json.dump(char2idx, fp)
-        with open(os.path.join(args.work_dir, INDEX_TO_CHAR_FILE), "w") as fp:
+        with open(os.path.join(args.work_dir, INDEX_TO_CHAR_FILE), "w", encoding="utf-8") as fp:
             json.dump(idx2char, fp)
         print('Instatiating model')
         model = CharLSTM(input_dim=len(char2idx),
@@ -321,9 +323,9 @@ if __name__ == '__main__':
         if not (os.path.exists(char2idx_path) and os.path.exists(idx2char_path)):
             raise FileNotFoundError("Character index has not been loaded yet.")
         # Load character indices from disk
-        with open(char2idx_path, "r") as fp:
+        with open(char2idx_path, "r", encoding="utf-8") as fp:
             char2idx = json.load(fp)
-        with open(idx2char_path, "r") as fp:
+        with open(idx2char_path, "r", encoding="utf-8") as fp:
             idx2char = json.load(fp)
             idx2char = {int(k):v for k,v in idx2char.items()}
         print('Loading model')
