@@ -1,5 +1,7 @@
 *.py[cod]
 *.out
+*.zip
+raw_data/
 work/
 output/
 submit/
