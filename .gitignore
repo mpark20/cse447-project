@@ -1,6 +1,7 @@
 *.py[cod]
 *.out
 *.zip
+.DS_store
 raw_data/
 work/
 output/
