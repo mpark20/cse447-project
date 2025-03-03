@@ -1,0 +1,190 @@
+Starting hyperparameter search...
+EPOCH 0/5: Train loss: 6.4210, Val loss: 4.8591
+EPOCH 1/5: Train loss: 3.9060, Val loss: 3.6444
+EPOCH 2/5: Train loss: 3.5379, Val loss: 3.4631
+EPOCH 3/5: Train loss: 3.3851, Val loss: 3.3645
+EPOCH 4/5: Train loss: 3.3175, Val loss: 3.3087
+Execution time: 3.700268030166626
+Traceback (most recent call last):
+  File "src/myprogram.py", line 442, in <module>
+    best_model = hparam_search(dataset_dict["train"], dataset_dict["val"], char2idx, n_iter=10)
+  File "src/myprogram.py", line 184, in hparam_search
+    results_dict["val_loss"] = curr_val_loss
+UnboundLocalError: local variable 'curr_val_loss' referenced before assignment
+(cse447-proj) molly@Mollys-MacBook-Air-4 cse447-project % python src/myprogram.py hparam_search --work_dir work
+[nltk_data] Downloading package punkt to /Users/molly/nltk_data...
+[nltk_data]   Package punkt is already up-to-date!
+[nltk_data] Downloading package punkt_tab to /Users/molly/nltk_data...
+[nltk_data]   Package punkt_tab is already up-to-date!
+Loading training data
+Starting hyperparameter search...
+EPOCH 0/5: Train loss: 6.2957, Val loss: 4.5109
+EPOCH 1/5: Train loss: 3.8325, Val loss: 3.6212
+EPOCH 2/5: Train loss: 3.5098, Val loss: 3.4538
+EPOCH 3/5: Train loss: 3.3720, Val loss: 3.3609
+EPOCH 4/5: Train loss: 3.3060, Val loss: 3.2863
+Execution time: 3.66373610496521
+{
+  "lr": 0.001,
+  "batch_size": 256,
+  "embed_dim": 16,
+  "hidden_dim": 64,
+  "dropout": 0.8,
+  "train_loss": 3.3060110211372375,
+  "val_loss": 3.286339193582535
+}
+-----
+EPOCH 0/5: Train loss: 4.9020, Val loss: 3.2807
+EPOCH 1/5: Train loss: 3.1904, Val loss: 3.1584
+EPOCH 2/5: Train loss: 3.0871, Val loss: 3.0689
+EPOCH 3/5: Train loss: 2.9927, Val loss: 2.9822
+EPOCH 4/5: Train loss: 2.9064, Val loss: 2.9119
+Execution time: 6.080032825469971
+{
+  "lr": 0.001,
+  "batch_size": 256,
+  "embed_dim": 64,
+  "hidden_dim": 128,
+  "dropout": 0.4,
+  "train_loss": 2.906430947780609,
+  "val_loss": 2.911896049976349
+}
+-----
+EPOCH 0/5: Train loss: 3.3371, Val loss: 2.9188
+EPOCH 1/5: Train loss: 2.7830, Val loss: 2.7282
+EPOCH 2/5: Train loss: 2.6403, Val loss: 2.6761
+EPOCH 3/5: Train loss: 2.5574, Val loss: 2.6237
+EPOCH 4/5: Train loss: 2.4859, Val loss: 2.5966
+Execution time: 4.519100189208984
+{
+  "lr": 0.005,
+  "batch_size": 64,
+  "embed_dim": 32,
+  "hidden_dim": 64,
+  "dropout": 0.2,
+  "train_loss": 2.485882391035557,
+  "val_loss": 2.596615934371948
+}
+-----
+EPOCH 0/5: Train loss: 6.8394, Val loss: 6.8080
+EPOCH 1/5: Train loss: 6.7649, Val loss: 6.7078
+EPOCH 2/5: Train loss: 6.5965, Val loss: 6.4213
+EPOCH 3/5: Train loss: 5.9902, Val loss: 5.3763
+EPOCH 4/5: Train loss: 4.7314, Val loss: 4.1958
+Execution time: 3.6617658138275146
+{
+  "lr": 5e-05,
+  "batch_size": 128,
+  "embed_dim": 32,
+  "hidden_dim": 64,
+  "dropout": 0,
+  "train_loss": 4.731403815746307,
+  "val_loss": 4.195755010843277
+}
+-----
+EPOCH 0/5: Train loss: 3.2716, Val loss: 3.0378
+EPOCH 1/5: Train loss: 2.9441, Val loss: 2.9535
+EPOCH 2/5: Train loss: 2.8332, Val loss: 2.8797
+EPOCH 3/5: Train loss: 2.7875, Val loss: 2.8767
+EPOCH 4/5: Train loss: 2.7627, Val loss: 2.8271
+Execution time: 10.542768239974976
+{
+  "lr": 0.01,
+  "batch_size": 32,
+  "embed_dim": 64,
+  "hidden_dim": 128,
+  "dropout": 0.8,
+  "train_loss": 2.762740408629179,
+  "val_loss": 2.8271030500531196
+}
+-----
+EPOCH 0/5: Train loss: 6.8436, Val loss: 6.8124
+EPOCH 1/5: Train loss: 6.7762, Val loss: 6.7362
+EPOCH 2/5: Train loss: 6.6816, Val loss: 6.6193
+EPOCH 3/5: Train loss: 6.5185, Val loss: 6.4004
+EPOCH 4/5: Train loss: 6.1703, Val loss: 5.8880
+Execution time: 4.310652017593384
+{
+  "lr": 5e-05,
+  "batch_size": 128,
+  "embed_dim": 128,
+  "hidden_dim": 64,
+  "dropout": 0.8,
+  "train_loss": 6.170321899652481,
+  "val_loss": 5.888026076555252
+}
+-----
+EPOCH 0/5: Train loss: 3.3282, Val loss: 3.0567
+EPOCH 1/5: Train loss: 2.9522, Val loss: 2.9752
+EPOCH 2/5: Train loss: 2.8810, Val loss: 2.9311
+EPOCH 3/5: Train loss: 2.8167, Val loss: 2.8928
+EPOCH 4/5: Train loss: 2.7759, Val loss: 2.8881
+Execution time: 8.087568044662476
+{
+  "lr": 0.01,
+  "batch_size": 64,
+  "embed_dim": 128,
+  "hidden_dim": 128,
+  "dropout": 0.8,
+  "train_loss": 2.7759373873472213,
+  "val_loss": 2.8881433084607124
+}
+-----
+EPOCH 0/5: Train loss: 5.7135, Val loss: 3.9584
+EPOCH 1/5: Train loss: 3.6357, Val loss: 3.5101
+EPOCH 2/5: Train loss: 3.4101, Val loss: 3.3695
+EPOCH 3/5: Train loss: 3.3093, Val loss: 3.3093
+EPOCH 4/5: Train loss: 3.2581, Val loss: 3.2652
+Execution time: 4.169743061065674
+{
+  "lr": 0.0005,
+  "batch_size": 32,
+  "embed_dim": 16,
+  "hidden_dim": 16,
+  "dropout": 0.6,
+  "train_loss": 3.2580820992588997,
+  "val_loss": 3.2651908196508885
+}
+-----
+EPOCH 0/5: Train loss: 2.9362, Val loss: 2.6847
+EPOCH 1/5: Train loss: 2.5636, Val loss: 2.6094
+EPOCH 2/5: Train loss: 2.4398, Val loss: 2.5990
+EPOCH 3/5: Train loss: 2.3650, Val loss: 2.6094
+EPOCH 4/5: Train loss: 2.3087, Val loss: 2.6188
+Execution time: 7.071246147155762
+{
+  "lr": 0.01,
+  "batch_size": 32,
+  "embed_dim": 128,
+  "hidden_dim": 64,
+  "dropout": 0.2,
+  "train_loss": 2.308699532598257,
+  "val_loss": 2.599041199311614
+}
+-----
+EPOCH 0/5: Train loss: 3.8900, Val loss: 3.3170
+EPOCH 1/5: Train loss: 3.2066, Val loss: 3.1755
+EPOCH 2/5: Train loss: 3.0879, Val loss: 3.1144
+EPOCH 3/5: Train loss: 3.0389, Val loss: 3.0777
+EPOCH 4/5: Train loss: 2.9924, Val loss: 3.0355
+Execution time: 2.956545829772949
+{
+  "lr": 0.01,
+  "batch_size": 128,
+  "embed_dim": 16,
+  "hidden_dim": 32,
+  "dropout": 0.8,
+  "train_loss": 2.992420729994774,
+  "val_loss": 3.035455712676048
+}
+-----
+Best model:
+{
+  "lr": 0.005,
+  "batch_size": 64,
+  "embed_dim": 32,
+  "hidden_dim": 64,
+  "dropout": 0.2,
+  "train_loss": 2.485882391035557,
+  "val_loss": 2.596615934371948
+}
