@@ -13,6 +13,10 @@ from torch import nn, optim
 from typing import Dict, List, Optional
 from pathlib import Path
 
+# set up device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
 # we only consider the previous 10 characters when training and making predictions,
 MAX_LINE_LEN = 10
 
@@ -100,6 +104,9 @@ def write_pred(preds, fname):
             f.write('{}\n'.format(p))
 
 def run_pred(data, char2idx, idx2char, max_length=MAX_LINE_LEN):
+    model.eval()
+    model.to(device)
+
     preds = []
     for inp in data:
         inp = clean_text(inp)
